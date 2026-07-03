@@ -18,6 +18,7 @@
 - Every reported number states dataset, shots, split file, seed, model variant, training budget, GPU. Headline numbers need ≥3 seeds.
 - HF downloads: unset proxy vars + `HF_ENDPOINT=https://hf-mirror.com` + `HF_HUB_DISABLE_XET=1`; pip via `-i https://pypi.tuna.tsinghua.edu.cn/simple`; `git clone` from GitHub still needs the proxy (`HTTP_PROXY=http://127.0.0.1:8119` etc., already set in this shell's env).
 - This repo is private — never push to a public remote.
+- The repo-level `python3` (what `python3 -m pytest` actually invokes, confirmed via `which python3` / `python3 --version` in this shell) resolves to the **system Python 3.6.8** (`/usr/bin/python3`), not any conda env — the `ftfsod` conda env is only for FT-FSOD's own train/test process. Any code under `baselines/ftfsod_cdfsod/` that `python3 -m pytest` imports (i.e. `aggregate_results.py` and its test) must be Python-3.6-compatible: no PEP 585 builtin generics (`dict[str, int]`, `list[float]`), no `from __future__ import annotations` (that's 3.7+). Use `typing.Dict`/`typing.List`/`typing.Tuple` instead.
 
 ## Confirmed facts from repo inspection (do not re-derive)
 
@@ -366,7 +367,7 @@ Print the mAP value found in Step 5. It should be a plausible detection mAP (rou
 
 **Interfaces:**
 - Consumes: the metrics-JSON path pattern confirmed in Task 5 Step 5 (referred to below as `<CONFIRMED_JSON_GLOB>` — fill in with the real pattern before writing `run_one.sh`).
-- Produces: `aggregate_results.py:load_results(results_dir: str) -> dict[tuple[str, str], list[float]]` (keyed by `(domain, shot)`, values are the list of mAP floats across seeds) and `aggregate_results.py:summarize(results: dict) -> list[dict]` (rows with `domain`, `shot`, `mean`, `std`, `n`) — used by later reporting work, so keep these names stable.
+- Produces: `aggregate_results.py:load_results(results_dir: str) -> Dict[Tuple[str, str], List[float]]` (keyed by `(domain, shot)`, values are the list of mAP floats across seeds) and `aggregate_results.py:summarize(results: dict) -> List[dict]` (rows with `domain`, `shot`, `mean`, `std`, `n`) — used by later reporting work, so keep these names stable. Use `typing.Dict/List/Tuple`, not builtin `dict[...]`/`list[...]` subscripting — this file is imported by `python3 -m pytest`, which per Global Constraints runs under system Python 3.6.8.
 
 - [ ] **Step 1: Write `run_one.sh`**
 
@@ -542,13 +543,14 @@ import json
 import os
 import re
 import statistics
+from typing import Dict, List, Tuple
 
 RUN_NAME_RE = re.compile(r"^swinB_(?P<domain>.+)_(?P<shot>\d+)shot_seed(?P<seed>\d+)$")
 
 
-def load_results(results_dir: str) -> dict[tuple[str, str], list[float]]:
+def load_results(results_dir: str) -> Dict[Tuple[str, str], List[float]]:
     """Group per-run mAP values by (domain, shot). Values are percentages."""
-    results: dict[tuple[str, str], list[float]] = {}
+    results = {}  # type: Dict[Tuple[str, str], List[float]]
     for path in sorted(glob.glob(os.path.join(results_dir, "*.json"))):
         run_name = os.path.splitext(os.path.basename(path))[0]
         match = RUN_NAME_RE.match(run_name)
@@ -564,7 +566,7 @@ def load_results(results_dir: str) -> dict[tuple[str, str], list[float]]:
     return results
 
 
-def summarize(results: dict[tuple[str, str], list[float]]) -> list[dict]:
+def summarize(results: Dict[Tuple[str, str], List[float]]) -> List[dict]:
     """Turn grouped results into sorted (domain, shot, mean, std, n) rows."""
     rows = []
     for (domain, shot), values in results.items():
@@ -579,7 +581,7 @@ def summarize(results: dict[tuple[str, str], list[float]]) -> list[dict]:
     return rows
 
 
-def render_markdown(rows: list[dict]) -> str:
+def render_markdown(rows: List[dict]) -> str:
     lines = ["| Domain | Shot | mAP (mean ± std) | N seeds |",
              "|---|---|---|---|"]
     for r in rows:
