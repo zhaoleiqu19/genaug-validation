@@ -24,7 +24,7 @@ Python 3 via conda envs (system default `python` is 2.7 — always use `python3`
 ## Data & shared-disk rules (hard rules)
 
 - **Shared datasets on `/data*` disks are read-only. Never write, edit, move, or delete anything there** — above all in other people's folders. CDFSOD lives at `/data6022/xuanlong/datasets/NTIRE2025_CDFSOD/` (a labmate's folder): read-only, no exceptions. If an experiment needs modified annotations (e.g. converted shot files), copy them into this repo or our own storage first.
-- Our own `/data*/qushiduo/` folders are for **large artifacts only** (model weights, big generated outputs). No code, no configs, no notes there.
+- Our own `/data*/qushiduo/` folders are **ours to write freely** — download new models/weights there, write large generated outputs there, reorganize as needed. Just keep code / configs / notes out of them (those live in this repo).
 - All project code / configs / docs live here, under `/home/qushiduo/projects/`.
 - This repo is **private and must stay private**: small business-scenario samples (tens of images/labels) may be committed here, but never pushed to any public remote.
 
