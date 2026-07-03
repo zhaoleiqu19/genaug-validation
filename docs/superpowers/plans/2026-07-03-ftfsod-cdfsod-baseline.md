@@ -651,40 +651,76 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 
 ---
 
-### Task 7: Run the full baseline sweep and publish results
+### Task 7: Run the phase-1 baseline sweep (clipart1k + FISH) and publish results
+
+**Scope note (revised after Task 5):** the official configs use uneven
+`max_epochs` per domain (FISH=16, clipart1k=50, ArTaxOr/DIOR/NEU-DET/UODD=100)
+with `val_interval=1` (full test-set eval every epoch). DIOR alone (5000 test
+images × 100 epochs) projects to ~136 GPU-hours for 3-shot×3-seed; the full
+6-domain matrix would run 4-5 days even on 2 GPUs. Per user decision
+(2026-07-03), Phase 1 covers only **clipart1k and FISH** — the two cheapest
+domains at official settings (~47min/run and ~34min/run respectively, no
+`val_interval` deviation needed) — 2 domains × 3 shots × 3 seeds = **18 runs**.
+ArTaxOr/DIOR/NEU-DET/UODD are deferred, added later only as specific
+generation-augmentation experiments need that domain. See the design spec's
+Scope section for the full reasoning.
 
 **Files:**
 - Create: `baselines/ftfsod_cdfsod/README.md`
 - Modify: `report/` — add the CDFSOD baseline table (create `report/` content if this is the first entry; check current state with `ls report/` before deciding whether to create a new file or append).
 
 **Interfaces:**
-- Consumes: `run_matrix.sh`, `aggregate_results.py` from Task 6.
-- Produces: the reference table every later generation-augmentation experiment compares against.
+- Consumes: `run_one.sh`, `aggregate_results.py` from Task 6. (Not `run_matrix.sh` — it hardcodes all 6 domains with no override; Phase 1's 2-domain scope is driven directly via `run_one.sh` calls instead, split across 2 GPUs.)
+- Produces: the reference table every later generation-augmentation experiment compares against, for these two domains.
 
-- [ ] **Step 1: Re-pick a free GPU (state may have changed since Task 5)**
+- [ ] **Step 1: Pick two free GPUs**
 
 ```bash
-nvidia-smi --query-gpu=index,memory.used,memory.total --format=csv
+nvidia-smi --query-gpu=index,memory.used,memory.total,utilization.gpu --format=csv
 ```
+Pick two GPUs at or near 0% utilization (as of design time, GPUs 0/1/4/5 were fully free — re-check, this changes). Call them `GPU_A` and `GPU_B`.
 
-- [ ] **Step 2: Launch the full sweep in the background**
+- [ ] **Step 2: Launch clipart1k on GPU_A and FISH on GPU_B, each as its own background sweep over 3 shots × 3 seeds**
 
-54 runs (6 domains × 3 shots × 3 seeds), each involving a 16-epoch fine-tune + eval — expect a long wall-clock (hours). Launch with `run_in_background` so this doesn't block:
+Each GPU runs its domain's 9 cells (3 shots × 3 seeds) sequentially via `run_one.sh`; the two domains run concurrently on separate GPUs. Use distinct port ranges per GPU to avoid collision. This intentionally does not reuse Task 5's ad-hoc FISH 1-shot/seed42 run (which wasn't produced through `run_one.sh` and wouldn't match the `results/` naming convention) — FISH 1-shot/seed42 gets re-run cleanly here so `aggregate_results.py` has a consistent set of 18 result files.
 
 ```bash
 cd /home/qushiduo/projects/genaug-validation
-nohup baselines/ftfsod_cdfsod/run_matrix.sh <GPU_ID> "42 43 44" \
-  > /data1/qushiduo/experiments/ftfsod_cdfsod/run_matrix.log 2>&1 &
-echo "launched, pid $!"
+mkdir -p /data1/qushiduo/experiments/ftfsod_cdfsod
+
+nohup bash -c '
+  i=0
+  for shot in 1 5 10; do
+    for seed in 42 43 44; do
+      port=$((19000 + i)); i=$((i+1))
+      baselines/ftfsod_cdfsod/run_one.sh clipart1k "$shot" "$seed" <GPU_A> "$port"
+    done
+  done
+' > /data1/qushiduo/experiments/ftfsod_cdfsod/run_clipart1k.log 2>&1 &
+echo "clipart1k sweep launched, pid $!"
+
+nohup bash -c '
+  i=0
+  for shot in 1 5 10; do
+    for seed in 42 43 44; do
+      port=$((19100 + i)); i=$((i+1))
+      baselines/ftfsod_cdfsod/run_one.sh FISH "$shot" "$seed" <GPU_B> "$port"
+    done
+  done
+' > /data1/qushiduo/experiments/ftfsod_cdfsod/run_fish.log 2>&1 &
+echo "FISH sweep launched, pid $!"
 ```
 
-- [ ] **Step 3: Monitor to completion**
+- [ ] **Step 3: Monitor to completion — long-running, no urgent polling needed**
+
+Expected total wall-clock: clipart1k ≈ 9 × 47min ≈ 7 hours; FISH ≈ 9 × 34min ≈ 5 hours; running concurrently on separate GPUs, so overall ≈ 7 hours. Per user instruction, this does not need frequent check-ins or an end-of-run notification — check back at a natural interval (e.g. next session) rather than polling every few minutes:
 
 ```bash
-tail -f /data1/qushiduo/experiments/ftfsod_cdfsod/run_matrix.log
+tail -20 /data1/qushiduo/experiments/ftfsod_cdfsod/run_clipart1k.log
+tail -20 /data1/qushiduo/experiments/ftfsod_cdfsod/run_fish.log
 ```
 
-Expected: 18 `[run_one] done: ...` lines × 3 seeds = 54 total, no `[run_one]` error exits. If any cell fails, note it — do not silently drop it from the report (per Global Constraints, incomplete cells must be flagged, not hidden).
+Expected: 9 `[run_one] done: ...` lines in each log, no `[run_one]` error exits. If any cell fails, note it — do not silently drop it from the report (per Global Constraints, incomplete cells must be flagged, not hidden).
 
 - [ ] **Step 4: Confirm result count**
 
@@ -693,7 +729,7 @@ wc -l baselines/ftfsod_cdfsod/results/run_manifest.csv
 ls baselines/ftfsod_cdfsod/results/*.json | wc -l
 ```
 
-Expected: 54 lines in the manifest, 54 JSON files (assuming no failures from Step 3; otherwise document the shortfall).
+Expected: 18 lines in the manifest, 18 JSON files (assuming no failures from Step 3; otherwise document the shortfall).
 
 - [ ] **Step 5: Generate the aggregated table**
 
@@ -768,7 +804,7 @@ If empty, create `report/cdfsod-baseline.md` with the same table plus a one-line
 
 ```bash
 git add baselines/ftfsod_cdfsod/README.md baselines/ftfsod_cdfsod/results/ report/
-git commit -m "feat: FT-FSOD CDFSOD baseline results (6 domains x 1/5/10-shot x 3 seeds)
+git commit -m "feat: FT-FSOD CDFSOD baseline results (clipart1k+FISH, 1/5/10-shot x 3 seeds)
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
