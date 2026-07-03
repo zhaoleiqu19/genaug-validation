@@ -27,14 +27,36 @@ baselines on CDFSOD.**
 
 ## Scope
 
-- 6 domains: ArTaxOr, Clipart1k, DIOR, FISH (DeepFish), NEU-DET, UODD
+- **Phase 1 (this run): 2 domains — clipart1k and FISH.** Revised down from
+  the original 6-domain plan after Task 5's smoke run revealed the official
+  configs use wildly uneven `max_epochs` per domain (FISH=16, clipart1k=50,
+  everyone else=100) combined with `val_interval=1` (full test-set eval every
+  epoch) — DIOR (5000 test images × 100 epochs) alone projects to ~136 GPU-hours
+  for 3-shot×3-seed, ArTaxOr to ~38h; the full 6-domain×3-seed matrix would run
+  ~4-5 days even on 2 GPUs. clipart1k (~47min/run) and FISH (~34min/run) are
+  the two cheapest domains at official settings (no `val_interval` deviation
+  needed) and, being cross-domain multi-class (clipart1k, 20 classes) and
+  already-validated single-class (FISH, from Task 5), give a working
+  baseline→generation-comparison pipeline on real, defensible numbers without
+  the multi-day cost. **ArTaxOr/DIOR/NEU-DET/UODD are deferred**, added later
+  only if/when a specific business or research need calls for that domain —
+  not run wholesale up front. Each generation-augmentation experiment will
+  need its target domain's baseline established before comparison; this is a
+  per-domain, as-needed cost, not a one-time full-matrix cost.
 - 1/5/10-shot, **official fixed support splits** (comparable to FT-FSOD paper /
   NTIRE leaderboard; no support resampling in this phase)
 - Model: MMGDINO-**B** (Swin-B) — FT-FSOD's primary config; Swin-L deferred
   (24GB 4090D headroom unverified, and B is the paper's main comparison point)
 - Variance: **3 training seeds** per cell for headline numbers (few-shot
   fine-tuning is unstable — FT-FSOD's own README says so even with fixed seeds).
-  Smoke phase runs 1 seed.
+  Smoke phase (Task 5) ran 1 seed on FISH 1-shot only.
+- **We do not compare our generation-augmented results directly against
+  FT-FSOD's published paper numbers.** Different infra/seeds/exact commit
+  would confound the augmentation's effect. Our own no-augmentation baseline
+  (this phase) — run on identical infra/seeds as the future augmented runs —
+  is the actual control group. The paper's numbers remain useful only as an
+  external sanity check that our reproduction is in a plausible band (see
+  Acceptance Criteria), not as a substitute baseline.
 
 ## Non-goals
 
@@ -82,9 +104,10 @@ weights (BERT) via hf-mirror with proxy unset.
    annotation surface) through FT-FSOD's `run_mmgdinob_traineval_cdfsod.sh`
    (or its per-run command extracted from the script), verifying train +
    eval + COCO-mAP output end to end.
-2. **Full matrix**: 6 domains × {1,5,10}-shot × 3 seeds, launched via a wrapper
-   script in `baselines/ftfsod_cdfsod/` that records per-run config, seed, GPU,
-   and wall-clock.
+2. **Phase-1 matrix**: clipart1k + FISH × {1,5,10}-shot × 3 seeds (see Scope),
+   launched via a wrapper script in `baselines/ftfsod_cdfsod/` that records
+   per-run config, seed, GPU, and wall-clock. Other domains added later,
+   as-needed, using the same wrapper.
 3. **Report**: results table (mean ± std over seeds) in `report/`, plus a short
    conclusion note in `baselines/ftfsod_cdfsod/` comparing against FT-FSOD's
    published numbers to validate our reproduction before anything builds on it.
