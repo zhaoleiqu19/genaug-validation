@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Stand up FT-FSOD (MM Grounding DINO Swin-B) as the reproducible, un-augmented K-shot detector baseline on CDFSOD, per `docs/superpowers/specs/2026-07-03-cdfsod-ftfsod-baseline-design.md`.
+**Goal:** Stand up FT-FSOD (MM Grounding DINO Swin-B) as the reproducible, un-augmented K-shot detector baseline on CDFSOD, per `docs/specs/2026-07-03-cdfsod-ftfsod-baseline-design.md`.
 
 **Architecture:** Clone upstream FT-FSOD to `~/external/FT-FSOD` (untouched mmdet fork with custom Hybrid-Ensemble-Decoder modules), point it directly at the read-only CDFSOD dataset via `src_path.py` (no data copying — verified the raw annotation files it expects already match what's on disk), and wrap its train/test CLI in our own repo-tracked scripts under `baselines/ftfsod_cdfsod/` that add seed control, GPU selection, and result aggregation the upstream one-off script doesn't have.
 
@@ -750,13 +750,13 @@ Detector: FT-FSOD (MM Grounding DINO Swin-B), upstream at
 https://github.com/Intellindust-AI-Lab/FT-FSOD (cloned locally to
 `~/external/FT-FSOD`, not vendored into this repo).
 
-Design doc: `docs/superpowers/specs/2026-07-03-cdfsod-ftfsod-baseline-design.md`
+Design doc: `docs/specs/2026-07-03-cdfsod-ftfsod-baseline-design.md`
 
 ## Setup
 
 1. Conda env `ftfsod` (Python 3.10, torch 2.6.0+cu124, mmengine/mmcv 2.1.0/mmdet,
    FT-FSOD's `requirements.txt`) — see plan
-   `docs/superpowers/plans/2026-07-03-ftfsod-cdfsod-baseline.md` Task 1 for exact
+   `docs/plans/2026-07-03-ftfsod-cdfsod-baseline.md` Task 1 for exact
    commands, including the MMEngine deterministic-mode patch (Task 2).
 2. Weights at `/data1/qushiduo/models/ftfsod/` (BERT-base-uncased,
    MMGDINO-B checkpoint) — Task 3.

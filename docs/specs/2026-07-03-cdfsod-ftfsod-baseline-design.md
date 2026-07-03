@@ -1,7 +1,7 @@
 # CDFSOD Baseline: FT-FSOD (Design)
 
 Date: 2026-07-03
-Status: awaiting user review
+Status: approved; in execution (phase-1 sweep running). Scope revised same day — see Scope.
 
 ## Context & Goal
 

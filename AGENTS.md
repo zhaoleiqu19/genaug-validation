@@ -4,7 +4,7 @@ Business-oriented validation: does generative-image augmentation measurably impr
 
 ## Tech Stack
 
-Python 3 via conda envs (system default `python` is 2.7 — always use `python3`). PyTorch ≤ 2.6.0 (CentOS 7 / glibc 2.17 ceiling). Detector baselines: CD-ViTO / DE-ViT (detectron2, ships with the CDFSOD repo) and/or a deployment-style detector (TBD).
+Python 3 via conda envs (system default `python` is 2.7, and the repo-level `python3`/pytest is 3.6.8 — code imported by `python3 -m pytest` must stay 3.6-compatible). PyTorch ≤ 2.6.0 (CentOS 7 / glibc 2.17 ceiling). Detector baselines: FT-FSOD (MM Grounding DINO Swin-B, mmdet fork at `~/external/FT-FSOD`, conda env `ftfsod`) on CDFSOD; EdgeCrafter/ECDet reserved for the business scenarios.
 
 ## Commands
 
@@ -19,6 +19,7 @@ Python 3 via conda envs (system default `python` is 2.7 — always use `python3`
 - `generation/` — synthetic-data pipelines (inpainting / LoRA-adapted generators / compositional routes)
 - `report/` — the running evidence report for the mentor (what works, what doesn't, at what cost)
 - `notes/` — working notes
+- `docs/specs/` — approved design specs; `docs/plans/` — implementation plans. Agent skills that default to `docs/superpowers/...` write here instead (user preference overrides the skill default).
 - Literature lives in the separate public KG repo (`~/projects/flux2_playground/docs/kg/`); this repo links to it, never copies it.
 
 ## Data & shared-disk rules (hard rules)
@@ -38,6 +39,7 @@ Python 3 via conda envs (system default `python` is 2.7 — always use `python3`
 - Every reported number states its exact setup (dataset, shots, seeds, detector, training budget) — few-shot variance is large; single-seed numbers are noise. Minimum 3 seeds for headline claims.
 - Datasets are referenced by absolute path in configs, never copied into the repo (tiny business samples are the one exception).
 - `handoff.md` / `agent-debrief.md` are volatile session state — gitignored, never committed.
+- `README.md` carries a dated changelog + roadmap for mentor alignment — update it whenever a milestone lands (new baseline numbers, direction changes, big findings), not just at the end.
 
 ## Current Work
 
