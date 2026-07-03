@@ -27,6 +27,8 @@
 - Each config uses `ann_file='annotations/{shot}_shot.json'` and `data_prefix=dict(img='train/')` for training, `annotations/test.json` + `test/` for val/test — i.e. it reads the **raw** (non-`_converted`) annotation files already on the read-only disk. No dataset copy/conversion needed.
 - `randomness=dict(seed=42, deterministic=True, ...)` is hardcoded per-config; `tools/train.py` also hardcodes `seed(42)` at import time, but `mmengine.Runner` re-seeds from `cfg.randomness` before training starts, and `tools/train.py` accepts `--cfg-options key=value` (mmengine `DictAction`, supports dotted nested keys) — so `--cfg-options randomness.seed=<N>` reliably controls the actual training seed per run.
 - `tools/dist_train.sh CONFIG GPUS PORT CUDA_VISIBLE_DEVICES [extra train.py args...]` and `tools/dist_test.sh CONFIG CHECKPOINT GPUS PORT CUDA_VISIBLE_DEVICES` both prepend the repo root to `PYTHONPATH`, which is what makes `import mmdet` resolve to FT-FSOD's bundled fork (custom `GroundingDINO_ParallelDecoder_15_DNQuery_rand` detector, `BBoxHeadFirstHook6` hook) instead of any pip-installed mmdet — **always launch via these wrapper scripts** (or manually set `PYTHONPATH` to the repo root), never bare `python tools/train.py`.
+- **`dist_test.sh` does not forward extra CLI args to `test.py`** (confirmed via `cat -A` on both scripts during Task 5): `dist_train.sh` ends in `--launcher pytorch ${@:5}`, forwarding `--work-dir`/`--cfg-options`/etc.; `dist_test.sh` ends in a hardcoded `--launcher pytorch` with no `${@:6}`. Passing `--work-dir`/`--out` to `dist_test.sh` silently drops them — `test.py` then falls back to its own default relative `./work_dirs/<config_basename>`, which would make every matrix run's test output collide in the same directory. `run_one.sh`'s test step must invoke `python -m torch.distributed.launch ... tools/test.py` directly (replicating what `dist_test.sh` does internally) rather than call the wrapper script.
+- The `ftfsod` conda env needs two fixes beyond Task 1's original scope, discovered when Task 5 actually ran training for the first time: `fairscale` (pip-installed; required for `GroundingDinoTransformerEncoder`'s `num_cp=6` activation-checkpointing wrapper, used by every CDFSOD config, not caught by any import-time check) and a patch to `mmengine/runner/checkpoint.py`'s `load_from_local` to pass `weights_only=False` to `torch.load` (torch 2.6 defaults `weights_only=True`, which rejects the MMGDINO-B checkpoint's `HistoryBuffer` objects). Both are env-only (conda site-packages), already applied and confirmed durable for this env — but will NOT survive an env rebuild, so any future `ftfsod` re-provisioning must reapply them.
 - The upstream `run_mmgdinob_traineval_cdfsod.sh` has a bug: its glob `grounding_dino_swin-b_finetune_A*.py` only matches `ArTaxOr` configs (the only domain starting with "A"), and only the 1-shot block is uncommented. We do not reuse this script — we write our own loop covering all 6 domains × 3 shots × N seeds.
 - `analyze_results_cdfsod.py` (upstream) expects directories named `swinB_all_{dataset}_{shot}shot` each containing a JSON with a top-level `coco/bbox_mAP` key. We don't reuse this script either (our own seeds need mean/std aggregation it doesn't do) but we mirror its `coco/bbox_mAP` key convention.
 - Existing conda envs `embed`/`flux2`/`srgs` already run `torch==2.6.0+cu124` successfully — confirms this wheel is already cached locally (installs in the new env should hit local pip cache, not the slow proxy path, for the torch/torchvision packages at least).
@@ -417,7 +419,19 @@ if [ -z "${CKPT_PATH}" ]; then
 fi
 
 echo "[run_one] test: ckpt=${CKPT_PATH}"
-conda run -n ftfsod ./tools/dist_test.sh "${CONFIG}" "${CKPT_PATH}" 1 "${PORT}" "${GPU}" \
+# NOTE: tools/dist_test.sh does NOT forward extra args to test.py (it has
+# no "${@:6}", unlike dist_train.sh's "${@:5}" — confirmed by inspecting
+# both scripts byte-for-byte during Task 5). Using it here would silently
+# drop --work-dir/--out and every test run would collide in test.py's
+# default relative work_dir. Replicate what dist_test.sh does internally,
+# with proper forwarding, instead of calling the wrapper.
+CUDA_VISIBLE_DEVICES="${GPU}" \
+PYTHONPATH="${FTFSOD_REPO}:${PYTHONPATH}" \
+conda run -n ftfsod python -m torch.distributed.launch \
+    --nnodes=1 --node_rank=0 --master_addr=127.0.0.1 \
+    --nproc_per_node=1 --master_port="${PORT}" \
+    "${FTFSOD_REPO}/tools/test.py" \
+    "${CONFIG}" "${CKPT_PATH}" --launcher pytorch \
     --work-dir "${TEST_WORK_DIR}" \
     --out "${TEST_WORK_DIR}/${DOMAIN}_${SHOT}shot.pkl"
 END_TS=$(date +%s)
