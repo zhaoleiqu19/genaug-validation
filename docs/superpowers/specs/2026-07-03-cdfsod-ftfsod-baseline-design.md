@@ -12,10 +12,13 @@ object detection? Per mentor (xuanlong) guidance the experiment structure is:
   Swin-B based, SOTA on CD-FSOD, official one-shot script for the exact NTIRE
   data we have). All generation-strategy experiments on CDFSOD compare against —
   and run on top of — this detector.
-- **Generation strategies get their own ablation ladder** (later, separate spec):
-  `no-aug baseline → gen-baseline → +trick1 → +trick1+trick2 → …`. Tricks live
-  strictly in generative-model space (different generators, different generation
-  strategies); no copy-paste routes. Tricks TBD as we survey.
+- **Generation side is intentionally open** (later, separate spec). Current
+  working direction — to be firmed up as we go, not binding: generative-model
+  routes (different generators / generation strategies) evaluated incrementally
+  against the no-aug baseline, roughly in a cumulative
+  `baseline → +trick1 → +trick1+trick2 → …` style so each addition's marginal
+  contribution stays attributable. Specific tricks, ordering, and even the exact
+  comparison structure get decided during the survey/experiment loop.
 - **EdgeCrafter (ECDet) is deferred to the business scenarios** — it will be the
   only detector used on business data; it does not need CDFSOD numbers now.
 
@@ -98,6 +101,6 @@ weights (BERT) via hf-mirror with proxy unset.
 
 ## Later phases (for orientation, not in scope)
 
-1. Generation-strategy ladder on CDFSOD × FT-FSOD (gen-model baselines and
-   cumulative tricks; separate brainstorm + spec once we survey generators).
+1. Generation-strategy experiments on CDFSOD × FT-FSOD (shape and specifics
+   deliberately open; separate brainstorm + spec once we survey generators).
 2. Business scenarios × ECDet (EdgeCrafter), once mentor provides data.
