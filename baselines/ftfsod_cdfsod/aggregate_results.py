@@ -48,11 +48,14 @@ def summarize(results: Dict[Tuple[str, str], List[float]]) -> List[dict]:
 
 
 def render_markdown(rows: List[dict]) -> str:
-    lines = ["| Domain | Shot | mAP (mean ± std) | N seeds |",
+    # Plain ASCII only: this machine's locale is "C", so non-ASCII output
+    # (e.g. U+00B1 "+/-") crashes `print()` under the system Python 3.6.8
+    # that runs this script.
+    lines = ["| Domain | Shot | mAP (mean +/- std) | N seeds |",
              "|---|---|---|---|"]
     for r in rows:
         lines.append(
-            f"| {r['domain']} | {r['shot']} | {r['mean']:.2f} ± {r['std']:.2f} | {r['n']} |")
+            f"| {r['domain']} | {r['shot']} | {r['mean']:.2f} +/- {r['std']:.2f} | {r['n']} |")
     return "\n".join(lines)
 
 

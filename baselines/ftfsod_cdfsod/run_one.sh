@@ -50,7 +50,7 @@ echo "[run_one] test: ckpt=${CKPT_PATH}"
 # default relative work_dir. Replicate what dist_test.sh does internally,
 # with proper forwarding, instead of calling the wrapper.
 CUDA_VISIBLE_DEVICES="${GPU}" \
-PYTHONPATH="${FTFSOD_REPO}:${PYTHONPATH}" \
+PYTHONPATH="${FTFSOD_REPO}:${PYTHONPATH:-}" \
 conda run -n ftfsod python -m torch.distributed.launch \
     --nnodes=1 --node_rank=0 --master_addr=127.0.0.1 \
     --nproc_per_node=1 --master_port="${PORT}" \
