@@ -223,6 +223,7 @@ __marimo__/
 # volatile session state (never committed)
 handoff.md
 agent-debrief.md
+.superpowers/
 
 # large artifacts (live on /data disks, not in git)
 outputs/

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Stand up FT-FSOD (MM Grounding DINO Swin-B) as the reproducible, un-augmented K-shot detector baseline on CDFSOD, per `docs/superpowers/specs/2026-07-03-cdfsod-ftfsod-baseline-design.md`.
+**Goal:** Stand up FT-FSOD (MM Grounding DINO Swin-B) as the reproducible, un-augmented K-shot detector baseline on CDFSOD, per `docs/specs/2026-07-03-cdfsod-ftfsod-baseline-design.md`.
 
 **Architecture:** Clone upstream FT-FSOD to `~/external/FT-FSOD` (untouched mmdet fork with custom Hybrid-Ensemble-Decoder modules), point it directly at the read-only CDFSOD dataset via `src_path.py` (no data copying — verified the raw annotation files it expects already match what's on disk), and wrap its train/test CLI in our own repo-tracked scripts under `baselines/ftfsod_cdfsod/` that add seed control, GPU selection, and result aggregation the upstream one-off script doesn't have.
 
@@ -18,6 +18,7 @@
 - Every reported number states dataset, shots, split file, seed, model variant, training budget, GPU. Headline numbers need ≥3 seeds.
 - HF downloads: unset proxy vars + `HF_ENDPOINT=https://hf-mirror.com` + `HF_HUB_DISABLE_XET=1`; pip via `-i https://pypi.tuna.tsinghua.edu.cn/simple`; `git clone` from GitHub still needs the proxy (`HTTP_PROXY=http://127.0.0.1:8119` etc., already set in this shell's env).
 - This repo is private — never push to a public remote.
+- The repo-level `python3` (what `python3 -m pytest` actually invokes, confirmed via `which python3` / `python3 --version` in this shell) resolves to the **system Python 3.6.8** (`/usr/bin/python3`), not any conda env — the `ftfsod` conda env is only for FT-FSOD's own train/test process. Any code under `baselines/ftfsod_cdfsod/` that `python3 -m pytest` imports (i.e. `aggregate_results.py` and its test) must be Python-3.6-compatible: no PEP 585 builtin generics (`dict[str, int]`, `list[float]`), no `from __future__ import annotations` (that's 3.7+). Use `typing.Dict`/`typing.List`/`typing.Tuple` instead.
 
 ## Confirmed facts from repo inspection (do not re-derive)
 
@@ -26,6 +27,8 @@
 - Each config uses `ann_file='annotations/{shot}_shot.json'` and `data_prefix=dict(img='train/')` for training, `annotations/test.json` + `test/` for val/test — i.e. it reads the **raw** (non-`_converted`) annotation files already on the read-only disk. No dataset copy/conversion needed.
 - `randomness=dict(seed=42, deterministic=True, ...)` is hardcoded per-config; `tools/train.py` also hardcodes `seed(42)` at import time, but `mmengine.Runner` re-seeds from `cfg.randomness` before training starts, and `tools/train.py` accepts `--cfg-options key=value` (mmengine `DictAction`, supports dotted nested keys) — so `--cfg-options randomness.seed=<N>` reliably controls the actual training seed per run.
 - `tools/dist_train.sh CONFIG GPUS PORT CUDA_VISIBLE_DEVICES [extra train.py args...]` and `tools/dist_test.sh CONFIG CHECKPOINT GPUS PORT CUDA_VISIBLE_DEVICES` both prepend the repo root to `PYTHONPATH`, which is what makes `import mmdet` resolve to FT-FSOD's bundled fork (custom `GroundingDINO_ParallelDecoder_15_DNQuery_rand` detector, `BBoxHeadFirstHook6` hook) instead of any pip-installed mmdet — **always launch via these wrapper scripts** (or manually set `PYTHONPATH` to the repo root), never bare `python tools/train.py`.
+- **`dist_test.sh` does not forward extra CLI args to `test.py`** (confirmed via `cat -A` on both scripts during Task 5): `dist_train.sh` ends in `--launcher pytorch ${@:5}`, forwarding `--work-dir`/`--cfg-options`/etc.; `dist_test.sh` ends in a hardcoded `--launcher pytorch` with no `${@:6}`. Passing `--work-dir`/`--out` to `dist_test.sh` silently drops them — `test.py` then falls back to its own default relative `./work_dirs/<config_basename>`, which would make every matrix run's test output collide in the same directory. `run_one.sh`'s test step must invoke `python -m torch.distributed.launch ... tools/test.py` directly (replicating what `dist_test.sh` does internally) rather than call the wrapper script.
+- The `ftfsod` conda env needs two fixes beyond Task 1's original scope, discovered when Task 5 actually ran training for the first time: `fairscale` (pip-installed; required for `GroundingDinoTransformerEncoder`'s `num_cp=6` activation-checkpointing wrapper, used by every CDFSOD config, not caught by any import-time check) and a patch to `mmengine/runner/checkpoint.py`'s `load_from_local` to pass `weights_only=False` to `torch.load` (torch 2.6 defaults `weights_only=True`, which rejects the MMGDINO-B checkpoint's `HistoryBuffer` objects). Both are env-only (conda site-packages), already applied and confirmed durable for this env — but will NOT survive an env rebuild, so any future `ftfsod` re-provisioning must reapply them.
 - The upstream `run_mmgdinob_traineval_cdfsod.sh` has a bug: its glob `grounding_dino_swin-b_finetune_A*.py` only matches `ArTaxOr` configs (the only domain starting with "A"), and only the 1-shot block is uncommented. We do not reuse this script — we write our own loop covering all 6 domains × 3 shots × N seeds.
 - `analyze_results_cdfsod.py` (upstream) expects directories named `swinB_all_{dataset}_{shot}shot` each containing a JSON with a top-level `coco/bbox_mAP` key. We don't reuse this script either (our own seeds need mean/std aggregation it doesn't do) but we mirror its `coco/bbox_mAP` key convention.
 - Existing conda envs `embed`/`flux2`/`srgs` already run `torch==2.6.0+cu124` successfully — confirms this wheel is already cached locally (installs in the new env should hit local pip cache, not the slow proxy path, for the torch/torchvision packages at least).
@@ -366,7 +369,7 @@ Print the mAP value found in Step 5. It should be a plausible detection mAP (rou
 
 **Interfaces:**
 - Consumes: the metrics-JSON path pattern confirmed in Task 5 Step 5 (referred to below as `<CONFIRMED_JSON_GLOB>` — fill in with the real pattern before writing `run_one.sh`).
-- Produces: `aggregate_results.py:load_results(results_dir: str) -> dict[tuple[str, str], list[float]]` (keyed by `(domain, shot)`, values are the list of mAP floats across seeds) and `aggregate_results.py:summarize(results: dict) -> list[dict]` (rows with `domain`, `shot`, `mean`, `std`, `n`) — used by later reporting work, so keep these names stable.
+- Produces: `aggregate_results.py:load_results(results_dir: str) -> Dict[Tuple[str, str], List[float]]` (keyed by `(domain, shot)`, values are the list of mAP floats across seeds) and `aggregate_results.py:summarize(results: dict) -> List[dict]` (rows with `domain`, `shot`, `mean`, `std`, `n`) — used by later reporting work, so keep these names stable. Use `typing.Dict/List/Tuple`, not builtin `dict[...]`/`list[...]` subscripting — this file is imported by `python3 -m pytest`, which per Global Constraints runs under system Python 3.6.8.
 
 - [ ] **Step 1: Write `run_one.sh`**
 
@@ -416,7 +419,19 @@ if [ -z "${CKPT_PATH}" ]; then
 fi
 
 echo "[run_one] test: ckpt=${CKPT_PATH}"
-conda run -n ftfsod ./tools/dist_test.sh "${CONFIG}" "${CKPT_PATH}" 1 "${PORT}" "${GPU}" \
+# NOTE: tools/dist_test.sh does NOT forward extra args to test.py (it has
+# no "${@:6}", unlike dist_train.sh's "${@:5}" — confirmed by inspecting
+# both scripts byte-for-byte during Task 5). Using it here would silently
+# drop --work-dir/--out and every test run would collide in test.py's
+# default relative work_dir. Replicate what dist_test.sh does internally,
+# with proper forwarding, instead of calling the wrapper.
+CUDA_VISIBLE_DEVICES="${GPU}" \
+PYTHONPATH="${FTFSOD_REPO}:${PYTHONPATH:-}" \
+conda run -n ftfsod python -m torch.distributed.launch \
+    --nnodes=1 --node_rank=0 --master_addr=127.0.0.1 \
+    --nproc_per_node=1 --master_port="${PORT}" \
+    "${FTFSOD_REPO}/tools/test.py" \
+    "${CONFIG}" "${CKPT_PATH}" --launcher pytorch \
     --work-dir "${TEST_WORK_DIR}" \
     --out "${TEST_WORK_DIR}/${DOMAIN}_${SHOT}shot.pkl"
 END_TS=$(date +%s)
@@ -542,13 +557,14 @@ import json
 import os
 import re
 import statistics
+from typing import Dict, List, Tuple
 
 RUN_NAME_RE = re.compile(r"^swinB_(?P<domain>.+)_(?P<shot>\d+)shot_seed(?P<seed>\d+)$")
 
 
-def load_results(results_dir: str) -> dict[tuple[str, str], list[float]]:
+def load_results(results_dir: str) -> Dict[Tuple[str, str], List[float]]:
     """Group per-run mAP values by (domain, shot). Values are percentages."""
-    results: dict[tuple[str, str], list[float]] = {}
+    results = {}  # type: Dict[Tuple[str, str], List[float]]
     for path in sorted(glob.glob(os.path.join(results_dir, "*.json"))):
         run_name = os.path.splitext(os.path.basename(path))[0]
         match = RUN_NAME_RE.match(run_name)
@@ -564,7 +580,7 @@ def load_results(results_dir: str) -> dict[tuple[str, str], list[float]]:
     return results
 
 
-def summarize(results: dict[tuple[str, str], list[float]]) -> list[dict]:
+def summarize(results: Dict[Tuple[str, str], List[float]]) -> List[dict]:
     """Turn grouped results into sorted (domain, shot, mean, std, n) rows."""
     rows = []
     for (domain, shot), values in results.items():
@@ -579,12 +595,15 @@ def summarize(results: dict[tuple[str, str], list[float]]) -> list[dict]:
     return rows
 
 
-def render_markdown(rows: list[dict]) -> str:
-    lines = ["| Domain | Shot | mAP (mean ± std) | N seeds |",
+def render_markdown(rows: List[dict]) -> str:
+    # Plain ASCII only: this machine's locale is "C", so non-ASCII output
+    # (e.g. U+00B1 "+/-") crashes `print()` under the system Python 3.6.8
+    # that runs this script.
+    lines = ["| Domain | Shot | mAP (mean +/- std) | N seeds |",
              "|---|---|---|---|"]
     for r in rows:
         lines.append(
-            f"| {r['domain']} | {r['shot']} | {r['mean']:.2f} ± {r['std']:.2f} | {r['n']} |")
+            f"| {r['domain']} | {r['shot']} | {r['mean']:.2f} +/- {r['std']:.2f} | {r['n']} |")
     return "\n".join(lines)
 
 
@@ -635,40 +654,76 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 
 ---
 
-### Task 7: Run the full baseline sweep and publish results
+### Task 7: Run the phase-1 baseline sweep (clipart1k + FISH) and publish results
+
+**Scope note (revised after Task 5):** the official configs use uneven
+`max_epochs` per domain (FISH=16, clipart1k=50, ArTaxOr/DIOR/NEU-DET/UODD=100)
+with `val_interval=1` (full test-set eval every epoch). DIOR alone (5000 test
+images × 100 epochs) projects to ~136 GPU-hours for 3-shot×3-seed; the full
+6-domain matrix would run 4-5 days even on 2 GPUs. Per user decision
+(2026-07-03), Phase 1 covers only **clipart1k and FISH** — the two cheapest
+domains at official settings (~47min/run and ~34min/run respectively, no
+`val_interval` deviation needed) — 2 domains × 3 shots × 3 seeds = **18 runs**.
+ArTaxOr/DIOR/NEU-DET/UODD are deferred, added later only as specific
+generation-augmentation experiments need that domain. See the design spec's
+Scope section for the full reasoning.
 
 **Files:**
 - Create: `baselines/ftfsod_cdfsod/README.md`
 - Modify: `report/` — add the CDFSOD baseline table (create `report/` content if this is the first entry; check current state with `ls report/` before deciding whether to create a new file or append).
 
 **Interfaces:**
-- Consumes: `run_matrix.sh`, `aggregate_results.py` from Task 6.
-- Produces: the reference table every later generation-augmentation experiment compares against.
+- Consumes: `run_one.sh`, `aggregate_results.py` from Task 6. (Not `run_matrix.sh` — it hardcodes all 6 domains with no override; Phase 1's 2-domain scope is driven directly via `run_one.sh` calls instead, split across 2 GPUs.)
+- Produces: the reference table every later generation-augmentation experiment compares against, for these two domains.
 
-- [ ] **Step 1: Re-pick a free GPU (state may have changed since Task 5)**
+- [ ] **Step 1: Pick two free GPUs**
 
 ```bash
-nvidia-smi --query-gpu=index,memory.used,memory.total --format=csv
+nvidia-smi --query-gpu=index,memory.used,memory.total,utilization.gpu --format=csv
 ```
+Pick two GPUs at or near 0% utilization (as of design time, GPUs 0/1/4/5 were fully free — re-check, this changes). Call them `GPU_A` and `GPU_B`.
 
-- [ ] **Step 2: Launch the full sweep in the background**
+- [ ] **Step 2: Launch clipart1k on GPU_A and FISH on GPU_B, each as its own background sweep over 3 shots × 3 seeds**
 
-54 runs (6 domains × 3 shots × 3 seeds), each involving a 16-epoch fine-tune + eval — expect a long wall-clock (hours). Launch with `run_in_background` so this doesn't block:
+Each GPU runs its domain's 9 cells (3 shots × 3 seeds) sequentially via `run_one.sh`; the two domains run concurrently on separate GPUs. Use distinct port ranges per GPU to avoid collision. This intentionally does not reuse Task 5's ad-hoc FISH 1-shot/seed42 run (which wasn't produced through `run_one.sh` and wouldn't match the `results/` naming convention) — FISH 1-shot/seed42 gets re-run cleanly here so `aggregate_results.py` has a consistent set of 18 result files.
 
 ```bash
 cd /home/qushiduo/projects/genaug-validation
-nohup baselines/ftfsod_cdfsod/run_matrix.sh <GPU_ID> "42 43 44" \
-  > /data1/qushiduo/experiments/ftfsod_cdfsod/run_matrix.log 2>&1 &
-echo "launched, pid $!"
+mkdir -p /data1/qushiduo/experiments/ftfsod_cdfsod
+
+nohup bash -c '
+  i=0
+  for shot in 1 5 10; do
+    for seed in 42 43 44; do
+      port=$((19000 + i)); i=$((i+1))
+      baselines/ftfsod_cdfsod/run_one.sh clipart1k "$shot" "$seed" <GPU_A> "$port"
+    done
+  done
+' > /data1/qushiduo/experiments/ftfsod_cdfsod/run_clipart1k.log 2>&1 &
+echo "clipart1k sweep launched, pid $!"
+
+nohup bash -c '
+  i=0
+  for shot in 1 5 10; do
+    for seed in 42 43 44; do
+      port=$((19100 + i)); i=$((i+1))
+      baselines/ftfsod_cdfsod/run_one.sh FISH "$shot" "$seed" <GPU_B> "$port"
+    done
+  done
+' > /data1/qushiduo/experiments/ftfsod_cdfsod/run_fish.log 2>&1 &
+echo "FISH sweep launched, pid $!"
 ```
 
-- [ ] **Step 3: Monitor to completion**
+- [ ] **Step 3: Monitor to completion — long-running, no urgent polling needed**
+
+Expected total wall-clock: clipart1k ≈ 9 × 47min ≈ 7 hours; FISH ≈ 9 × 34min ≈ 5 hours; running concurrently on separate GPUs, so overall ≈ 7 hours. Per user instruction, this does not need frequent check-ins or an end-of-run notification — check back at a natural interval (e.g. next session) rather than polling every few minutes:
 
 ```bash
-tail -f /data1/qushiduo/experiments/ftfsod_cdfsod/run_matrix.log
+tail -20 /data1/qushiduo/experiments/ftfsod_cdfsod/run_clipart1k.log
+tail -20 /data1/qushiduo/experiments/ftfsod_cdfsod/run_fish.log
 ```
 
-Expected: 18 `[run_one] done: ...` lines × 3 seeds = 54 total, no `[run_one]` error exits. If any cell fails, note it — do not silently drop it from the report (per Global Constraints, incomplete cells must be flagged, not hidden).
+Expected: 9 `[run_one] done: ...` lines in each log, no `[run_one]` error exits. If any cell fails, note it — do not silently drop it from the report (per Global Constraints, incomplete cells must be flagged, not hidden).
 
 - [ ] **Step 4: Confirm result count**
 
@@ -677,7 +732,7 @@ wc -l baselines/ftfsod_cdfsod/results/run_manifest.csv
 ls baselines/ftfsod_cdfsod/results/*.json | wc -l
 ```
 
-Expected: 54 lines in the manifest, 54 JSON files (assuming no failures from Step 3; otherwise document the shortfall).
+Expected: 18 lines in the manifest, 18 JSON files (assuming no failures from Step 3; otherwise document the shortfall).
 
 - [ ] **Step 5: Generate the aggregated table**
 
@@ -698,13 +753,13 @@ Detector: FT-FSOD (MM Grounding DINO Swin-B), upstream at
 https://github.com/Intellindust-AI-Lab/FT-FSOD (cloned locally to
 `~/external/FT-FSOD`, not vendored into this repo).
 
-Design doc: `docs/superpowers/specs/2026-07-03-cdfsod-ftfsod-baseline-design.md`
+Design doc: `docs/specs/2026-07-03-cdfsod-ftfsod-baseline-design.md`
 
 ## Setup
 
 1. Conda env `ftfsod` (Python 3.10, torch 2.6.0+cu124, mmengine/mmcv 2.1.0/mmdet,
    FT-FSOD's `requirements.txt`) — see plan
-   `docs/superpowers/plans/2026-07-03-ftfsod-cdfsod-baseline.md` Task 1 for exact
+   `docs/plans/2026-07-03-ftfsod-cdfsod-baseline.md` Task 1 for exact
    commands, including the MMEngine deterministic-mode patch (Task 2).
 2. Weights at `/data1/qushiduo/models/ftfsod/` (BERT-base-uncased,
    MMGDINO-B checkpoint) — Task 3.
@@ -752,7 +807,7 @@ If empty, create `report/cdfsod-baseline.md` with the same table plus a one-line
 
 ```bash
 git add baselines/ftfsod_cdfsod/README.md baselines/ftfsod_cdfsod/results/ report/
-git commit -m "feat: FT-FSOD CDFSOD baseline results (6 domains x 1/5/10-shot x 3 seeds)
+git commit -m "feat: FT-FSOD CDFSOD baseline results (clipart1k+FISH, 1/5/10-shot x 3 seeds)
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
