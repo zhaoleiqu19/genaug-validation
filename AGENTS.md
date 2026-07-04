@@ -39,7 +39,7 @@ Python 3 via conda envs (system default `python` is 2.7, and the repo-level `pyt
 - Every reported number states its exact setup (dataset, shots, seeds, detector, training budget) — few-shot variance is large; single-seed numbers are noise. Minimum 3 seeds for headline claims.
 - Datasets are referenced by absolute path in configs, never copied into the repo (tiny business samples are the one exception).
 - `handoff.md` / `agent-debrief.md` are volatile session state — gitignored, never committed.
-- `README.md` carries a dated changelog + roadmap for mentor alignment — update it whenever a milestone lands (new baseline numbers, direction changes, big findings), not just at the end.
+- `README.md` is the mentor-facing progress view — update it whenever a milestone lands. Calibrate for the reader: the mentor is the FT-FSOD author and a CD-FSOD expert. Results first (tables with full setup), then intent/next steps. No mentor names in it, no environment/debugging war stories (those live in `baselines/*/README.md` and commit history), no explaining the benchmark to its own author.
 
 ## Current Work
 
