@@ -14,9 +14,21 @@ routes only.
 **This spec covers only rung 0 — the generation baseline**: the simplest
 defensible generative augmentation, whose measured Δ (positive or negative)
 becomes the reference point every later trick's marginal contribution is
-attributed against. Rung 0's known weaknesses are chosen deliberately — they
-are the targets the ladder's tricks (foreground-preserving inpainting, LoRA
-domain customization, post-generation filtering) exist to fix.
+attributed against. Rung 0's known weaknesses are chosen deliberately: they
+give whatever tricks come later a clearly attributable target. **The tricks
+themselves are NOT decided** — candidate directions from the survey
+(foreground-preserving inpainting, LoRA domain customization,
+post-generation filtering, generator swap) are a working list only, to be
+finalized with the mentor as rung-0 results come in; per the earlier
+direction decision, tricks are chosen iteratively, not upfront.
+
+Method provenance: the mechanism is SDEdit-style img2img; using it as
+training-data augmentation follows DA-Fusion (ICLR 2024, classification) —
+rung 0 is that recipe minus textual inversion, transplanted to detection
+with inherited boxes. The box-drift risk of naive editing is a documented
+failure mode in the detection-generation literature (the reason
+layout-conditioned and foreground-preserving routes exist), which is
+precisely what makes it the right baseline weakness to measure.
 
 A calibration fact from the baseline curves: +4 real images (1→5-shot) buys
 +2.26 mAP on FISH and +3.53 on clipart1k. Synthetic-data gains will be
@@ -82,8 +94,8 @@ the business-facing metric.
 
 ## Non-goals
 
-- No tricks yet (inpainting t1, LoRA t2, filtering t3 are later rungs, each
-  its own small spec/plan).
+- No tricks yet (candidates like inpainting/LoRA/filtering are undecided;
+  whichever gets picked becomes its own small spec/plan after rung-0 results).
 - No generator comparison (lateral axis, later).
 - No 10-shot, no ArTaxOr/DIOR/NEU-DET/UODD, no business data, no prompt
   engineering beyond the fixed template.
