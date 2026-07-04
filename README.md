@@ -57,11 +57,28 @@ python3 baselines/ftfsod_cdfsod/aggregate_results.py baselines/ftfsod_cdfsod/res
 
 **Phase-1 baseline 范围决策**
 - 官方 config 各域 `max_epochs` 差异大(16~100)且每 epoch 全量验证,全量 6 域 × 3 seed 需 4-5 天 GPU 时。决定 Phase 1 只跑 **clipart1k + FISH**(2 域 × 1/5/10-shot × 3 seeds = 18 组,官方设置不动),其余 4 域按后续实验需要再补——baseline 是按域一次性成本,不是每次实验的重复成本。
-- Phase-1 跑批已启动(2 卡并行,预计 ~7h),完成后 baseline 表落 `report/`。
+- Phase-1 跑批已启动(2 卡并行)。
+
+### 2026-07-04
+
+**Phase-1 baseline 跑完**(`report/cdfsod-baseline.md`)
+
+| Domain | Shot | mAP (mean±std, 3 seeds) | 论文发表值 | 差值 |
+|---|---|---|---|---|
+| FISH | 1 | 42.37±0.59 | 42.7 | -0.33 |
+| FISH | 5 | 44.63±1.26 | 45.5 | -0.87 |
+| FISH | 10 | 45.77±0.42 | 46.3 | -0.53 |
+| clipart1k | 1 | 56.57±0.29 | 55.6 | +0.97 |
+| clipart1k | 5 | 60.10±0.30 | 59.4 | +0.70 |
+| clipart1k | 10 | 61.07±0.55 | 59.6 | +1.47 |
+
+复现质量好:6 个数字都在论文发表值 ±1.5 mAP 以内,两个域都随 shot 数单调上升。这就是后续所有生成增强实验(clipart1k/FISH)的对照基准。
+
+- 跑批过程中又抓到 2 个真实 bug(都是"跑一次才会暴露"的那种,Task 6 的 review 没做端到端实测,只做了单测+语法检查):`run_one.sh` 测试步骤在 `set -u` 下引用未设置的 `$PYTHONPATH` 直接崩溃——18 组训练全部成功但测试全部失败,好在 checkpoint 都在,补跑测试即可,不用重训;`aggregate_results.py` 用了 `±` 符号,这台机器 locale 是 `C`,`print()` 时 UnicodeEncodeError——改成纯 ASCII 的 `+/-`。均已修复并二次验证。
 
 ## Roadmap
 
-- [ ] Phase-1 baseline 表:clipart1k + FISH × {1,5,10}-shot × 3 seeds(mean±std)→ `report/`
+- [x] Phase-1 baseline 表:clipart1k + FISH × {1,5,10}-shot × 3 seeds(mean±std)→ `report/cdfsod-baseline.md`
 - [ ] 生成侧调研收敛 → 第一个生成策略的 spec(生成模型路线,累积消融阶梯)
 - [ ] 第一个生成增强实验 vs Phase-1 baseline
 - [ ] 业务数据到位后:ECDet 部署基线
