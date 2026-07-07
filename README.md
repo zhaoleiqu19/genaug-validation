@@ -7,9 +7,9 @@
 
 | 层 | 角色 | 检测器 |
 |---|---|---|
-| 强基线(CDFSOD) | 方法论验证的对照系 | FT-FSOD(MMGDINO Swin-B) |
-| 部署基线(业务数据) | 业务落地的实际载体 | ECDet(业务数据到位后启用) |
-| 生成侧 | 累积消融:`baseline → +trick1 → +trick1+trick2 → …`,每个 trick 的边际贡献可归因 | 只做生成模型路线(不做 copy-paste),具体 trick 边调研边定 |
+| CDFSOD  | 方法验证的对照 | FT-FSOD(MMGDINO Swin-B) |
+| 业务数据 | 落地的实际载体 | ECDet(业务数据到位后启用) |
+| 生成侧 | 累积消融:`baseline → +different trick/method → …`,每个 trick 的边际贡献可归因 | 只做生成模型路线(不做 copy-paste),具体 method 边调研边定 |
 
 协议:官方固定 support split,每格 3 seeds 报 mean±std;增强结果只与同一环境、同一 seed 协议下自跑的无增强 baseline 对比(发表数字仅用于复现校验,不作对照组,避免环境差异混入增强效果)。
 
@@ -34,13 +34,13 @@ Phase 1 先只建这两个域的 baseline:官方 config 各域训练预算差异
 
 复现细节(环境、脚本、逐 run 结果与 manifest)见 `baselines/ftfsod_cdfsod/`。
 
-### ⏳ 进行中:生成侧方案收敛
+###  进行中:生成侧方案收敛
 
 文献综述:`report/related-work.md`。检测上四条候选路线,按对底层生成模型的要求分类:
 
 | 路线 | 代表工作 | 对底层模型的要求 |
 |---|---|---|
-| 真图编辑(rung-0 在跑) | DA-Fusion | 需要平滑的 strength 曲线,不能是步数蒸馏模型 |
+| 真图编辑图img2img(rung-0 在跑) | DA-Fusion | 需要平滑的 strength 曲线,不能是步数蒸馏模型 |
 | 前景保留 + 背景生成 | Domain-RAG | 只需 T2I 出图质量,不涉及 strength 平滑度 |
 | 少样本 LoRA 域定制 | DataDream / FLORA / LoFT | 需要成熟的 LoRA 微调工具链 |
 | layout 条件生成 | ODGEN / GeoDiffusion / AeroGen | 绑定发布代码自带的底座,不是自由换的 |
