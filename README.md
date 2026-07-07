@@ -36,13 +36,25 @@ Phase 1 先只建这两个域的 baseline:官方 config 各域训练预算差异
 
 ### ⏳ 进行中:生成侧方案收敛
 
-文献综述:`report/related-work.md`(生成增强 × 少样本检测/分类,约 40 篇)。候选路线:前景保留+背景生成(Domain-RAG 系)、少样本 LoRA 域定制生成器(DataDream/FLORA 系)、layout 条件生成(ODGEN 系)。定稿后先在 clipart1k 或 FISH 上与上表对照出第一批增强数字。
+文献综述:`report/related-work.md`。检测上四条候选路线,按对底层生成模型的要求分类:
+
+| 路线 | 代表工作 | 对底层模型的要求 |
+|---|---|---|
+| 真图编辑(rung-0 在跑) | DA-Fusion | 需要平滑的 strength 曲线,不能是步数蒸馏模型 |
+| 前景保留 + 背景生成 | Domain-RAG | 只需 T2I 出图质量,不涉及 strength 平滑度 |
+| 少样本 LoRA 域定制 | DataDream / FLORA / LoFT | 需要成熟的 LoRA 微调工具链 |
+| layout 条件生成 | ODGEN / GeoDiffusion / AeroGen | 绑定发布代码自带的底座,不是自由换的 |
+
+前三条可共用同一生成器;layout 条件生成底座由具体复现代码决定,不纳入本轮筛选。
+
+生成器筛选(可视化验证已完成):FLUX.2-klein-4B(步数蒸馏)strength 曲线断崖式——0.3–0.8 近乎 no-op,0.85 瞬间跳变到完全不同构图、框失效,不满足平滑控制的前提;FLUX.1-dev(guidance-蒸馏、非步数蒸馏)同批测试曲线平滑,**确定为 rung-0 生成器**,权重与环境已就绪。具体强度取值待剩余 support 图验证后定稿。
 
 ### 下一步
 
-1. 第一个生成增强实验 vs Phase-1 baseline
-2. 业务数据到位后:ECDet 部署基线 + 业务域上的增强验证
-3. 其余 CDFSOD 域按需补 baseline
+1. 强度定稿:剩余 FISH support 图 + clipart1k 补测,写入 rung-0 spec
+2. 第一个生成增强实验(rung-0 img2img,FLUX.1-dev)vs Phase-1 baseline
+3. 业务数据到位后:ECDet 部署基线 + 业务域上的增强验证
+4. 其余 CDFSOD 域按需补 baseline
 
 ## 仓库结构与运行
 

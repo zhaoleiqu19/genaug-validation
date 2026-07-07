@@ -37,9 +37,17 @@ the business-facing metric.
 
 ## Method (rung 0, pre-registered)
 
-- **Generator:** FLUX.2-klein-4B (local, `flux2` conda env, diffusers 0.38).
-  Fixed for the whole ladder so later rungs stay comparable; a
-  different-generator comparison is a separate lateral axis, not rung 0.
+- **Generator:** FLUX.1-dev (local, `flux2` conda env), confirmed via visual
+  pre-check — see `README.md` ("生成侧方案收敛") for the full candidate list
+  and rationale. FLUX.2-klein-4B was the original candidate but failed the
+  same pre-check: its step-distilled sampling gives a near-binary strength
+  response (no-op below ~0.8, catastrophic box drift above ~0.85, no usable
+  middle ground), unlike FLUX.1-dev (guidance-distilled only) and a
+  non-distilled control (SDXL-Inpaint), both of which showed a graceful
+  faithfulness-diversity continuum on the same images. Fixed for the whole
+  ladder so later rungs stay comparable; running multiple generators as
+  parallel formal arms remains a separate lateral axis, not rung 0. The exact
+  strength value is a separate open item — see below.
 - **Operation:** img2img on each official K-shot support image, at a fixed
   strength, with a fixed per-domain prompt template (e.g. FISH: underwater
   photo of fish; clipart1k: cartoon/clipart illustration of {classes}).
@@ -50,9 +58,13 @@ the business-facing metric.
   lower strength → little diversity. That faithfulness–diversity tension is
   exactly what t1 (background-only inpainting) later addresses.
 - **Strength selection (bounded, before any detector training):** try 2-3
-  candidate strengths (~0.3/0.5) on a handful of FISH support images, pick
-  ONE by visual plausibility of object preservation, document the choice.
-  No tuning against test mAP, ever.
+  candidate strengths spanning the confirmed generator's actual
+  faithfulness-diversity range — not assumed in advance (klein's cliff showed
+  the usable range can't be guessed from architecture alone, it must be
+  measured) — across all support images in the target K-shot split, not a
+  handful (cliff position was found to vary by image content). Pick ONE by
+  visual plausibility of object preservation, document the choice. No tuning
+  against test mAP, ever.
 
 ## Experiment protocol (pre-registered)
 
@@ -96,7 +108,10 @@ the business-facing metric.
 
 - No tricks yet (candidates like inpainting/LoRA/filtering are undecided;
   whichever gets picked becomes its own small spec/plan after rung-0 results).
-- No generator comparison (lateral axis, later).
+- Generator *selection* (confirming one working generator before rung-0
+  runs) is a prerequisite gate, not covered by this non-goal. Still out of
+  scope: running multiple generators as parallel formal experimental arms —
+  that comparison stays a separate lateral axis, later.
 - No 10-shot, no ArTaxOr/DIOR/NEU-DET/UODD, no business data, no prompt
   engineering beyond the fixed template.
 
