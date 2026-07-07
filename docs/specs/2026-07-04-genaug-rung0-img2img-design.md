@@ -1,7 +1,14 @@
 # Generation Ladder Rung 0: img2img Baseline (Design)
 
 Date: 2026-07-04
-Status: awaiting user review
+Status: **superseded by pre-check results (2026-07-07)** — see
+`report/genaug-rung0-precheck.md`. The naive-global-img2img method below was
+falsified on FISH (no global strength is label-consistent across the support
+set) before any training run. The working method going forward is box-local
+foreground partial repaint (freeze background, repaint inside the GT box at
+strength<1) — confirmed 6/6 on clipart1k, narrow/domain-limited on FISH.
+This document is kept as the historical record of the original design and
+its rejection; do not implement the method below as specified.
 
 ## Context & Goal
 

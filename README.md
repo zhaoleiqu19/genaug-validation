@@ -5,11 +5,13 @@
 
 ## 实验设计
 
-| 层 | 角色 | 检测器 |
-|---|---|---|
-| 强基线(CDFSOD) | 方法论验证的对照系 | FT-FSOD(MMGDINO Swin-B) |
-| 部署基线(业务数据) | 业务落地的实际载体 | ECDet(业务数据到位后启用) |
-| 生成侧 | 累积消融:`baseline → +trick1 → +trick1+trick2 → …`,每个 trick 的边际贡献可归因 | 只做生成模型路线(不做 copy-paste),具体 trick 边调研边定 |
+
+| 层           | 角色                                                               | 检测器                                    |
+| ----------- | ---------------------------------------------------------------- | -------------------------------------- |
+| 强基线(CDFSOD) | 方法论验证的对照系                                                        | FT-FSOD(MMGDINO Swin-B)                |
+| 部署基线(业务数据)  | 业务落地的实际载体                                                        | ECDet(业务数据到位后启用)                       |
+| 生成侧         | 累积消融:`baseline → +trick1 → +trick1+trick2 → …`,每个 trick 的边际贡献可归因 | 只做生成模型路线(不做 copy-paste),具体 trick 边调研边定 |
+
 
 协议:官方固定 support split,每格 3 seeds 报 mean±std;增强结果只与同一环境、同一 seed 协议下自跑的无增强 baseline 对比(发表数字仅用于复现校验,不作对照组,避免环境差异混入增强效果)。
 
@@ -19,14 +21,16 @@
 
 MMGDINO-B,官方 1/5/10-shot split,官方训练预算,seeds 42/43/44:
 
-| Domain | Shot | ours (mean±std) | paper | Δ |
-|---|---|---|---|---|
-| clipart1k | 1 | 56.57 ± 0.29 | 55.6 | +0.97 |
-| clipart1k | 5 | 60.10 ± 0.30 | 59.4 | +0.70 |
-| clipart1k | 10 | 61.07 ± 0.55 | 59.6 | +1.47 |
-| FISH | 1 | 42.37 ± 0.59 | 42.7 | −0.33 |
-| FISH | 5 | 44.63 ± 1.26 | 45.5 | −0.87 |
-| FISH | 10 | 45.77 ± 0.42 | 46.3 | −0.53 |
+
+| Domain    | Shot | ours (mean±std) | paper | Δ     |
+| --------- | ---- | --------------- | ----- | ----- |
+| clipart1k | 1    | 56.57 ± 0.29    | 55.6  | +0.97 |
+| clipart1k | 5    | 60.10 ± 0.30    | 59.4  | +0.70 |
+| clipart1k | 10   | 61.07 ± 0.55    | 59.6  | +1.47 |
+| FISH      | 1    | 42.37 ± 0.59    | 42.7  | −0.33 |
+| FISH      | 5    | 44.63 ± 1.26    | 45.5  | −0.87 |
+| FISH      | 10   | 45.77 ± 0.42    | 46.3  | −0.53 |
+
 
 6 格均在发表值 ±1.5 mAP 内,复现可信。**此表即后续 clipart1k/FISH 上所有生成增强实验的固定对照组**,不随实验重跑。
 
@@ -34,27 +38,37 @@ Phase 1 先只建这两个域的 baseline:官方 config 各域训练预算差异
 
 复现细节(环境、脚本、逐 run 结果与 manifest)见 `baselines/ftfsod_cdfsod/`。
 
-### ⏳ 进行中:生成侧方案收敛
+### ✅ 生成路线可视化预检(训练前,零 GPU-训练成本)· 2026-07-07
 
-文献综述:`report/related-work.md`。检测上四条候选路线,按对底层生成模型的要求分类:
+文献综述:`report/related-work.md`。检测任务的核心约束和分类不一样:错误的
+生成会污染**标签**(多出没标注的同类物体、目标被抹除/错位),不只是像素质量,
+所以每条候选路线在投入检测器训练之前,先在真实 K-shot support 图上过一遍
+廉价的可视化标签完整性预检。生成器统一用 FLUX.1-dev(`flux2` 环境;
+FLUX.2-klein-4B 步数蒸馏、strength 曲线断崖式跳变,预检已淘汰)。
 
-| 路线 | 代表工作 | 对底层模型的要求 |
-|---|---|---|
-| 真图编辑(rung-0 在跑) | DA-Fusion | 需要平滑的 strength 曲线,不能是步数蒸馏模型 |
-| 前景保留 + 背景生成 | Domain-RAG | 只需 T2I 出图质量,不涉及 strength 平滑度 |
-| 少样本 LoRA 域定制 | DataDream / FLORA / LoFT | 需要成熟的 LoRA 微调工具链 |
-| layout 条件生成 | ODGEN / GeoDiffusion / AeroGen | 绑定发布代码自带的底座,不是自由换的 |
 
-前三条可共用同一生成器;layout 条件生成底座由具体复现代码决定,不纳入本轮筛选。
+| 路线                      | 域                    | 判定                                                      |
+| ----------------------- | -------------------- | ------------------------------------------------------- |
+| 全局 img2img(原 rung-0 设计) | FISH(5 张 support 全测) | **证伪**——无论 strength 都无法保证 5 张图同时标签完整                    |
+| 锁定 GT 框、重绘背景            | clipart1k(6 张)       | **失败**(0/6)——base FLUX.1-dev 非 inpainting 专训模型,倾向整图重编场景 |
+| 锁定背景、框内局部重绘(strength<1) | clipart1k(6 张)       | **可行**(6/6 @ strength 0.4,5/6 到 0.8 仍干净)                |
+| 锁定背景、框内局部重绘(strength<1) | FISH(5 张 support 全测) | **部分可行**——2/5 有窄安全窗口,3/5(小目标/模糊目标)全 strength 溶解         |
 
-生成器筛选(可视化验证已完成):FLUX.2-klein-4B(步数蒸馏)strength 曲线断崖式——0.3–0.8 近乎 no-op,0.85 瞬间跳变到完全不同构图、框失效,不满足平滑控制的前提;FLUX.1-dev(guidance-蒸馏、非步数蒸馏)同批测试曲线平滑,**确定为 rung-0 生成器**,权重与环境已就绪。具体强度取值待剩余 support 图验证后定稿。
+
+结果与机制全文:`report/genaug-rung0-precheck.md`。  
+**"锁背景、框内局部重绘"确定为 clipart1k 的rung-1 方法**。  
+FISH 域在小、模糊目标的情况下，strength0.4只对框内重绘也会目标溶解，后面考虑尝试降低strength试一下。  
+
 
 ### 下一步
 
-1. 强度定稿:剩余 FISH support 图 + clipart1k 补测,写入 rung-0 spec
-2. 第一个生成增强实验(rung-0 img2img,FLUX.1-dev)vs Phase-1 baseline
-3. 业务数据到位后:ECDet 部署基线 + 业务域上的增强验证
-4. 其余 CDFSOD 域按需补 baseline
+1. clipart1k rung-1 正式生成 pipeline(锁背景、框内局部重绘,strength≈0.4 起)
+2. FT-FSOD 训练,与 Phase-1 baseline 对比
+3. FISH 生成增强暂不投入——域固有的小目标/低对比问题,后面再做实验尝试。
+4. 业务数据到位后:ECDet 部署基线 + 业务域上的增强验证
+5. 其余 CDFSOD 域按需补 baseline
+
+
 
 ## 仓库结构与运行
 
@@ -62,7 +76,7 @@ Phase 1 先只建这两个域的 baseline:官方 config 各域训练预算差异
 baselines/ftfsod_cdfsod/   baseline 跑批脚本、逐 run 结果、复现文档
 generation/                合成数据管线(生成模型路线)
 experiments/               每个实验一个目录:配置、脚本、结果、结论
-report/                    证据报告(related-work、baseline 表)
+report/                    证据报告(related-work、baseline 表、生成路线预检)
 docs/specs/ docs/plans/    设计文档与实施计划
 ```
 
