@@ -65,7 +65,7 @@ def main():
 
     print("[load] {}".format(args.model_dir), flush=True)
     pipe = FluxInpaintPipeline.from_pretrained(args.model_dir, torch_dtype=torch.bfloat16)
-    pipe.enable_model_cpu_offload(gpu_id=args.gpu)
+    pipe.enable_sequential_cpu_offload(gpu_id=args.gpu)
 
     for ann in annotations:
         image_id = ann["image_id"]
