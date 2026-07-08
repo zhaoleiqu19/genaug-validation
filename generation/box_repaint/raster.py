@@ -20,7 +20,7 @@ def build_box_mask(size, box):
     mask = Image.new("L", size, 0)
     d = ImageDraw.Draw(mask)
     x, y, w, h = box
-    d.rectangle([x, y, x + w, y + h], fill=255)
+    d.rectangle([x, y, x + w - 1, y + h - 1], fill=255)
     return mask
 
 
