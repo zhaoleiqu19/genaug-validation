@@ -12,10 +12,10 @@ PORT="$5"
 FTFSOD_REPO="${FTFSOD_REPO:-$HOME/external/FT-FSOD}"
 WORK_ROOT="${WORK_ROOT:-/data1/qushiduo/experiments/ftfsod_cdfsod/work_dirs}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-RESULTS_DIR="${SCRIPT_DIR}/results"
+RESULTS_DIR="${RESULTS_DIR:-${SCRIPT_DIR}/results}"
 
 CONFIG="${FTFSOD_REPO}/configs_cdfsod/final_configs_bs4/grounding_dino_swin-b_finetune_${DOMAIN}_${SHOT}shot.py"
-RUN_NAME="swinB_${DOMAIN}_${SHOT}shot_seed${SEED}"
+RUN_NAME="swinB_${DOMAIN}_${SHOT}shot_seed${SEED}${RUN_TAG:-}"
 TRAIN_WORK_DIR="${WORK_ROOT}/${RUN_NAME}"
 TEST_WORK_DIR="${WORK_ROOT}/${RUN_NAME}_test"
 
@@ -32,9 +32,24 @@ cd "${FTFSOD_REPO}"
 
 echo "[run_one] train: domain=${DOMAIN} shot=${SHOT} seed=${SEED} gpu=${GPU}"
 START_TS=$(date +%s)
+
+# Optional dataset-path overrides (set by augmented-data experiments, e.g.
+# experiments/clipart1k_box_repaint/run_stage1.sh). Unset by default, which
+# preserves the exact behavior this frozen baseline was reproduced with.
+CFG_OPTIONS=(randomness.seed="${SEED}")
+if [ -n "${TRAIN_DATA_ROOT:-}" ]; then
+  CFG_OPTIONS+=(train_dataloader.dataset.data_root="${TRAIN_DATA_ROOT}")
+fi
+if [ -n "${TRAIN_ANN_FILE:-}" ]; then
+  CFG_OPTIONS+=(train_dataloader.dataset.ann_file="${TRAIN_ANN_FILE}")
+fi
+if [ -n "${TRAIN_IMG_PREFIX:-}" ]; then
+  CFG_OPTIONS+=(train_dataloader.dataset.data_prefix.img="${TRAIN_IMG_PREFIX}")
+fi
+
 conda run -n ftfsod ./tools/dist_train.sh "${CONFIG}" 1 "${PORT}" "${GPU}" \
     --work-dir "${TRAIN_WORK_DIR}" \
-    --cfg-options randomness.seed="${SEED}"
+    --cfg-options "${CFG_OPTIONS[@]}"
 
 CKPT_PATH=$(find "${TRAIN_WORK_DIR}" -name "best_coco_bbox_mAP_iter_*.pth" | head -n 1)
 if [ -z "${CKPT_PATH}" ]; then
