@@ -50,6 +50,9 @@ def main():
     args = parser.parse_args()
 
     os.makedirs(args.out_dir, exist_ok=True)
+    manifest_dir = os.path.dirname(args.manifest)
+    if manifest_dir:
+        os.makedirs(manifest_dir, exist_ok=True)
     torch.cuda.set_device(args.gpu)
     device = "cuda:{}".format(args.gpu)
 

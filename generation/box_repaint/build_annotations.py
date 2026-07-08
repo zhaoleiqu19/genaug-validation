@@ -9,6 +9,7 @@ Usage:
         --out-dir /data1/qushiduo/datasets/genaug/clipart1k/1shot
 """
 import argparse
+import copy
 import json
 import os
 import shutil
@@ -52,7 +53,7 @@ def build_merged_annotations(shot_data, manifest_rows):
         })
         synthetic_file_names.append(file_name)
         for ann in anns_by_image.get(src_id, []):
-            new_ann = dict(ann)
+            new_ann = copy.deepcopy(ann)
             new_ann["id"] = next_ann_id
             new_ann["image_id"] = new_image_id
             next_ann_id += 1
