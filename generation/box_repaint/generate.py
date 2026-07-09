@@ -68,7 +68,13 @@ def main():
 
     print("[load] {}".format(args.model_dir), flush=True)
     pipe = FluxInpaintPipeline.from_pretrained(args.model_dir, torch_dtype=torch.bfloat16)
-    pipe.enable_sequential_cpu_offload(gpu_id=args.gpu)
+    pipe.enable_group_offload(
+        onload_device=torch.device("cuda:{}".format(args.gpu)),
+        offload_device=torch.device("cpu"),
+        offload_type="block_level",
+        num_blocks_per_group=1,
+        use_stream=True,
+    )
 
     for ann in annotations:
         image_id = ann["image_id"]

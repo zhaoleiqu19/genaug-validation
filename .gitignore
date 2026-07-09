@@ -224,6 +224,7 @@ __marimo__/
 handoff.md
 agent-debrief.md
 .superpowers/
+docs/notes/
 
 # large artifacts (live on /data disks, not in git)
 outputs/
