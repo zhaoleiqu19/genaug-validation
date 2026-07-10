@@ -28,6 +28,10 @@
   <https://arxiv.org/abs/2506.05872> ｜ code: <https://github.com/LiYu0524/Domain-RAG>
   Training-free 组合式生成：检索域相似背景 → 用 Flux 生成域对齐背景 → 前景-背景合成（前景保真，框标注天然保留）。在 CDFSOD 上 SOTA。**与我们想验证的路线几乎同题，是最重要的参照/竞品。**
 
+- ⭐ **GiPL: Generative augmented iterative Pseudo-Labeling for Cross-Domain Few-Shot Object Detection** (CVPR 2026 Workshop)
+  <https://arxiv.org/abs/2605.29539>
+  双分支：support set 上的迭代伪标签自训练 + 大 VLM 驱动的生成增强（合成域对齐、**多物体**标注图像抑制过拟合）。在 RUOD/CARPK/CarDD 上 1/5/10-shot 全面超 SOTA。**与我们同题的最新 CD-FSOD+生成工作，多物体合成是与单框 repaint 的关键差异点。**
+
 - ⭐ **MPAD: Multi-Perspective Data Augmentation for Few-shot Object Detection** (2025)
   <https://arxiv.org/abs/2502.18195>
   针对 FSOD 的生成增强框架：in-context 物体合成（ICOS）+ 生成过程中混合 prompt embedding（HPAS）产生 hard sample，并关注前景-背景关系。
@@ -47,6 +51,10 @@
 - **Diverse Instance Generation via Diffusion Models for Enhanced Few-Shot Object Detection in Remote Sensing Images** (2025)
   <https://arxiv.org/abs/2511.18031>
   遥感 FSOD 上用扩散模型生成多样实例做增强，域特定 FSOD+生成的案例。
+
+- **Few-Shot LoRA Adaptation of a Flow-Matching Foundation Model for Cross-Spectral Object Detection** (2026)
+  <https://arxiv.org/abs/2601.04381>
+  每域仅 100 对图像微调 LoRA 做 RGB→IR / RGB→SAR 跨谱段检测数据生成；LoRA 定制生成器路线在**跨谱段域偏移**检测上的近期案例。
 
 - **Diverse Generation while Maintaining Semantic Coordination: A Diffusion-Based Data Augmentation Method for Object Detection** (2024)
   <https://arxiv.org/abs/2408.02891>
@@ -82,6 +90,10 @@
   <https://arxiv.org/abs/2212.03863>
   用 SD 生成 + CLIP 过滤物体实例做大规模 copy-paste，LVIS 长尾类 +6.8 box AP。**生成式 copy-paste 路线的奠基工作**（较旧但保留）。
 
+- ⭐ **ReCon: Region-Controllable Data Augmentation with Rectification and Alignment for Object Detection** (NeurIPS 2025 spotlight)
+  <https://arxiv.org/abs/2510.15783>
+  在扩散采样过程中注入**区域级 rectification**（用预训练感知模型的反馈修正生成区域）+ region-aligned cross-attention 改善空间-语义对齐；跨数据集/骨干/数据规模均涨点。**与我们的框区域 repaint 路线最接近的顶会工作：它的「生成区域用检测器反馈校正」正是我们单源低多样性 repaint 无信号的一个机制性解释 / 改进方向。**
+
 - **Cycle-Consistent Learning for Joint Layout-to-Image Generation and Object Detection** (ICCV 2025)
   <https://openaccess.thecvf.com/content/ICCV2025/papers/Cai_Cycle-Consistent_Learning_for_Joint_Layout-to-Image_Generation_and_Object_Detection_ICCV_2025_paper.pdf>
   生成器与检测器循环一致联合训练，代表「生成-检测闭环」的新方向。
@@ -112,6 +124,10 @@
   <https://arxiv.org/abs/2505.11703>
   对每张真图各训一个 LoRA 再融合来生成数据，提升合成数据的保真+多样性。
 
+- **ChimeraLoRA: Multi-Head LoRA-Guided Synthetic Datasets** (2026)
+  <https://arxiv.org/abs/2602.19708>
+  多头 LoRA 引导合成分类数据集；LoFT「每图一 LoRA 再融合」思路的近期延伸，进一步权衡保真与多样性。
+
 - **Synthetic Data from Diffusion Models Improves ImageNet Classification** (TMLR 2023, Google)
   <https://arxiv.org/abs/2304.08466>
   在 ImageNet 上微调 Imagen 后生成数据增强训练集，首次在大规模分类上证明合成数据能带来显著提升（奠基性，保留）。
@@ -133,6 +149,10 @@
 - **SynSur: An end-to-end generative pipeline for synthetic industrial surface defect generation and detection** (2026)
   <https://arxiv.org/abs/2604.26633>
   工业表面缺陷从生成到检测的端到端 pipeline。
+
+- **Accelerating New Product Introduction for Visual Quality Inspection via Few-Shot Diffusion-Based Defect Synthesis** (2026)
+  <https://arxiv.org/abs/2604.22850>
+  面向「新产品上线、缺陷样本极少」的质检场景，用少样本扩散合成缺陷；mAP 78.8 → 83.3。**几十张图的业务质检场景 + 明确成本-收益度量，与我们业务导向的验证目标高度对齐。**
 
 ## 5. 何时有效 / 系统分析（决定我们的实验设计）
 
@@ -168,5 +188,6 @@
 ## 附：CDFSOD testbed 相关（简列备查）
 
 - [CD-ViTO](https://arxiv.org/abs/2402.03094) (ECCV 2024) — benchmark + baseline 检测器（[code](https://github.com/lovelyqian/CDFSOD-benchmark)）
-- [NTIRE 2025 CDFSOD 挑战赛报告](https://arxiv.org/abs/2504.10685) ／ [NTIRE 2026 第二届报告](https://arxiv.org/abs/2604.11998) — 各队方法汇总，可对齐当前最强做法
+- [FT-FSOD: A Closer Look at Cross-Domain Few-Shot Object Detection — Fine-Tuning Matters and Parallel Decoder Helps](https://arxiv.org/abs/2603.28182) (CVPR 2026) — **本项目正在使用的检测器 baseline**（MM Grounding DINO Swin-B 微调），我们所有 mAP 数字对齐的主赛道参照（[code](https://github.com/Intellindust-AI-Lab/FT-FSOD)）
+- [NTIRE 2025 CDFSOD 挑战赛报告](https://arxiv.org/abs/2504.10685) ／ [NTIRE 2026 第二届报告](https://arxiv.org/abs/2604.11998) — 各队方法汇总，可对齐当前最强做法。**注：2026 报告内含 MPDA（Qwen3-VL 抽背景 prompt + Flux.1-Fill 背景 inpaint、前景框保留）——与我们的 box-repaint 路线几乎相同的一个竞赛实现，直接可比。**
 - [Multi-Modal Prototypes for CDFSOD](https://arxiv.org/abs/2602.18811) (2026) — 非生成路线的最新进展，作对照
